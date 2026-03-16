@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torneio de Padel - Modo Escada</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Modal de Seleção de Jogador -->
+    <div id="playerModal" class="modal">
+        <div class="modal-content">
+            <h2>Selecione o seu Jogador</h2>
+            <select id="playerSelect">
+                <option value="">Escolha um jogador...</option>
+            </select>
+            <button onclick="selectPlayer()">Confirmar</button>
+        </div>
+    </div>
+
+    <!-- Layout Principal -->
+    <div id="mainLayout" class="main-layout hidden">
+        <header>
+            <h1>Torneio de Padel - Modo Escada</h1>
+            <div class="player-info">
+                <span id="currentPlayer"></span>
+                <button onclick="changePlayer()">Trocar Jogador</button>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button id="classificationTab" class="tab-button active" onclick="switchTab('classification')">
+                Classificação
+            </button>
+            <button id="challengesTab" class="tab-button" onclick="switchTab('challenges')">
+                Desafios
+            </button>
+        </nav>
+
+        <!-- Tab: Classificação -->
+        <section id="classificationView" class="tab-content active">
+            <div class="classification-container">
+                <table class="classification-table">
+                    <thead>
+                        <tr>
+                            <th>Posição</th>
+                            <th>Dupla</th>
+                            <th>Jogos</th>
+                            <th>Pontos</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="classificationBody">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Tab: Desafios -->
+        <section id="challengesView" class="tab-content hidden">
+            <div class="challenges-container">
+                <div class="challenges-header">
+                    <h2>Desafios da Dupla</h2>
+                    <div class="challenges-filters">
+                        <button id="filterCurrentBtn" class="btn-secondary" onclick="setChallengesViewMode('current')">Em Curso</button>
+                        <button id="filterPastBtn" class="btn-secondary" onclick="setChallengesViewMode('past')">Passados</button>
+                        <button id="filterAllBtn" class="btn-secondary" onclick="setChallengesViewMode('all')">Todos</button>
+                    </div>
+                </div>
+                <table class="challenges-table">
+                    <thead>
+                        <tr>
+                            <th>Dupla Desafiadora</th>
+                            <th>Dupla Desafiada</th>
+                            <th>Pontos Desafiadora</th>
+                            <th>Pontos Desafiada</th>
+                            <th>Data</th>
+                            <th>Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="challengesBody">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- View: Inserção de Resultado -->
+        <section id="resultView" class="tab-content hidden">
+            <div class="result-view-container">
+                <div class="result-view-header">
+                    <h2>Inserir Resultado do Desafio</h2>
+                    <button class="btn-secondary" onclick="backToChallenges()">Voltar aos Desafios</button>
+                </div>
+                <div id="resultForm" class="result-form-card">
+                    <!-- Preenchido por JavaScript -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Modal de Desafio -->
+        <div id="challengeModal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close" onclick="closeChallengeModal()">&times;</span>
+                <h2>Desafiar Dupla</h2>
+                <div id="challengeForm">
+                    <!-- Preenchido por JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

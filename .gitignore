@@ -1,0 +1,25 @@
+# Logs
+*.log
+
+# Dados de backup
+dados/*.backup
+dados/backup/
+
+# Cache
+__pycache__/
+*.pyc
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dados temporários
+temp/
+tmp/

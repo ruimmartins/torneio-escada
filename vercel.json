@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm install",
+  "installCommand": "npm install",
+  "outputDirectory": ".",
+  "framework": "express",
+  "env": {
+    "MONGODB_URI": "@mongodb_uri"
+  }
+}
