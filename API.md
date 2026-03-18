@@ -98,31 +98,19 @@ Criar um novo desafio.
 
 ---
 
-### Dados em CSV
+### Atualização de Dados
 
-#### GET /dados/jogadores.csv
-Retorna dados de jogadores em formato CSV.
-
-#### GET /dados/duplas.csv
-Retorna dados de duplas em formato CSV.
-
-#### GET /dados/desafios.csv
-Retorna dados de desafios em formato CSV.
-
-#### POST /api/update-csv
-Atualizar dados (usar com cuidado - sobrescreve tudo).
+#### PUT /api/desafios/:id/resultado
+Atualiza o resultado de um desafio específico.
 
 **Request Body:**
 ```json
 {
-    "filename": "desafios.csv",
-    "data": [
-        {
-            "dupla_1_id": 1,
-            "dupla_2_id": 2,
-            ...
-        }
-    ]
+    "resultado_set_1": "6-4",
+    "resultado_set_2": "6-3",
+    "resultado_tie_break": "",
+    "data_resultado": "2026-03-16",
+    "winner_team_id": 1
 }
 ```
 

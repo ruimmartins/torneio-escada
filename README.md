@@ -61,10 +61,6 @@ npm start
 ```
 ├── api/
 │   └── index.js              # Express app (Vercel serverless)
-├── dados/                    # Backup CSV (opcional localmente)
-│   ├── jogadores.csv
-│   ├── duplas.csv
-│   └── desafios.csv
 ├── index.html                # Interface principal
 ├── app.js                    # Lógica client-side
 ├── style.css                 # Responsive design
@@ -133,7 +129,7 @@ O aplicativo vem com dados de exemplo:
 - 3 desafios concluídos
 - 2 desafios em curso
 
-Para começar com dados novos, edite os arquivos em `dados/` diretamente.
+Para começar com dados novos, edite o script [seed-db.js](seed-db.js) e execute novamente o seed.
 
 ## 🛠️ Stack Tecnológico
 

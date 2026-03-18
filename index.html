@@ -3,28 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2e2e2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Torneio Escada">
     <title>Torneio de Padel - Modo Escada</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/images/magic-logo.jpg">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Modal de Seleção de Jogador -->
-    <div id="playerModal" class="modal">
+    <div id="authLoading" class="auth-loading-screen">
+        <div class="auth-loading-content">
+            <div class="auth-spinner" aria-hidden="true"></div>
+            <p id="authLoadingText">A verificar sessão...</p>
+        </div>
+    </div>
+
+    <!-- Modal de Login -->
+    <div id="loginModal" class="modal hidden">
         <div class="modal-content">
-            <h2>Selecione o seu Jogador</h2>
-            <select id="playerSelect">
-                <option value="">Escolha um jogador...</option>
-            </select>
-            <button onclick="selectPlayer()">Confirmar</button>
+            <h2>Entrar no Torneio</h2>
+            <input id="loginUsername" type="text" placeholder="Utilizador" autocomplete="username">
+            <div class="password-input-wrapper">
+                <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
+                <button type="button" id="toggleLoginPasswordBtn" class="btn-toggle-password" onclick="toggleLoginPasswordVisibility()">Mostrar</button>
+            </div>
+            <button id="loginSubmitBtn" onclick="login()">Entrar</button>
         </div>
     </div>
 
     <!-- Layout Principal -->
     <div id="mainLayout" class="main-layout hidden">
         <header>
-            <h1>Torneio de Padel - Modo Escada</h1>
+            <div class="header-brand">
+                <img src="images/magic-logo.jpg" alt="Logo do clube" class="header-logo">
+                <h1>Torneio Escada</br>Liga de clubes 2026</h1>
+            </div>
             <div class="player-info">
                 <span id="currentPlayer"></span>
-                <button onclick="changePlayer()">Trocar Jogador</button>
+                <button onclick="logout()">Terminar Sessão</button>
             </div>
         </header>
 
@@ -35,24 +53,49 @@
             <button id="challengesTab" class="tab-button" onclick="switchTab('challenges')">
                 Desafios
             </button>
+            <button id="alertsTab" class="tab-button hidden" onclick="switchTab('alerts')">
+                Alertas
+            </button>
         </nav>
 
         <!-- Tab: Classificação -->
         <section id="classificationView" class="tab-content active">
             <div class="classification-container">
-                <table class="classification-table">
-                    <thead>
-                        <tr>
-                            <th>Posição</th>
-                            <th>Dupla</th>
-                            <th>Jogos</th>
-                            <th>Pontos</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="classificationBody">
-                    </tbody>
-                </table>
+                <div id="currentChallengeContainer" class="current-challenge-container hidden">
+                    <h3>Desafio em Curso</h3>
+                    <table class="challenges-table current-challenge-table">
+                        <tbody id="currentChallengeBody"></tbody>
+                    </table>
+                </div>
+                <div class="classification-main-container">
+                    <table class="classification-table">
+                        <thead>
+                            <tr>
+                                <th>Posição</th>
+                                <th>Dupla</th>
+                                <th>Jogos</th>
+                                <th>Pontos</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="classificationBody">
+                        </tbody>
+                    </table>
+                    <div class="classification-legend" aria-label="Legenda de estados da classificação">
+                        <div class="legend-item">
+                            <span class="legend-color legend-own"></span>
+                            <span>Verde: própria dupla</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color legend-ongoing"></span>
+                            <span>Vermelho: dupla com desafio em curso</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color legend-inactive"></span>
+                            <span>Azul: dupla inactiva (lesão/indisponibilidade)</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -60,21 +103,24 @@
         <section id="challengesView" class="tab-content hidden">
             <div class="challenges-container">
                 <div class="challenges-header">
-                    <h2>Desafios da Dupla</h2>
+                    <h2>Desafios</h2>
                     <div class="challenges-filters">
-                        <button id="filterCurrentBtn" class="btn-secondary" onclick="setChallengesViewMode('current')">Em Curso</button>
-                        <button id="filterPastBtn" class="btn-secondary" onclick="setChallengesViewMode('past')">Passados</button>
-                        <button id="filterAllBtn" class="btn-secondary" onclick="setChallengesViewMode('all')">Todos</button>
+                        <div class="filter-group">
+                            <button id="filterMineBtn" class="btn-secondary active" onclick="setChallengesScopeFilter('mine')">Meus</button>
+                            <button id="filterAllBtn" class="btn-secondary" onclick="setChallengesScopeFilter('all')">Todos</button>
+                        </div>
+                        <div class="filter-group">
+                            <button id="filterCurrentBtn" class="btn-secondary active" onclick="setChallengesStatusFilter('current')">Em Curso</button>
+                            <button id="filterPastBtn" class="btn-secondary" onclick="setChallengesStatusFilter('past')">Passados</button>
+                        </div>
                     </div>
                 </div>
                 <table class="challenges-table">
                     <thead>
                         <tr>
-                            <th>Dupla Desafiadora</th>
-                            <th>Dupla Desafiada</th>
-                            <th>Pontos Desafiadora</th>
-                            <th>Pontos Desafiada</th>
-                            <th>Data</th>
+                            <th>Dupla 1</th>
+                            <th>Dupla 2</th>
+                            <th>Datas</th>
                             <th>Resultado</th>
                         </tr>
                     </thead>
@@ -83,6 +129,59 @@
                 </table>
             </div>
         </section>
+
+        <!-- Tab: Alertas -->
+        <section id="alertsView" class="tab-content hidden">
+            <div id="alertsSection" class="alerts-section">
+                <div id="alertGameDateOverdue" class="alert-block hidden">
+                    <h3 class="alert-title alert-title-overdue">⏰ Desafios com data de jogo ultrapassada (falta resultado)</h3>
+                    <table class="alert-table">
+                        <thead><tr><th>Dupla 1</th><th>Dupla 2</th><th>Data Jogo</th><th>Dias de atraso</th></tr></thead>
+                        <tbody id="alertGameDateOverdueBody"></tbody>
+                    </table>
+                </div>
+                <div id="alertOverdue" class="alert-block hidden">
+                    <h3 class="alert-title alert-title-overdue">⚠️ Desafios sem resultado há mais de 16 dias</h3>
+                    <table class="alert-table">
+                        <thead><tr><th>Dupla 1</th><th>Dupla 2</th><th>Data Desafio</th><th>Dias em atraso</th></tr></thead>
+                        <tbody id="alertOverdueBody"></tbody>
+                    </table>
+                </div>
+                <div id="alertOverdueWarning" class="alert-block hidden">
+                    <h3 class="alert-title alert-title-overdue-warning">🕔 Desafios sem resultado entre 12 e 16 dias</h3>
+                    <table class="alert-table">
+                        <thead><tr><th>Dupla 1</th><th>Dupla 2</th><th>Data Desafio</th><th>Dias em aberto</th></tr></thead>
+                        <tbody id="alertOverdueWarningBody"></tbody>
+                    </table>
+                </div>
+                <div id="alertInactive" class="alert-block hidden">
+                    <h3 class="alert-title alert-title-inactive">📅 Duplas sem jogar há mais de 30 dias</h3>
+                    <table class="alert-table">
+                        <thead><tr><th>Dupla</th><th>Último jogo</th><th>Dias sem jogar</th></tr></thead>
+                        <tbody id="alertInactiveBody"></tbody>
+                    </table>
+                </div>
+                <div id="alertInactiveWarning" class="alert-block hidden">
+                    <h3 class="alert-title alert-title-inactive-warning">📊 Duplas sem jogar entre 15 e 30 dias</h3>
+                    <table class="alert-table">
+                        <thead><tr><th>Dupla</th><th>Último jogo</th><th>Dias sem jogar</th></tr></thead>
+                        <tbody id="alertInactiveWarningBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <div id="gameDateModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Definir Data de Jogo</h2>
+                <p id="gameDateModalText"></p>
+                <input type="date" id="gameDateInput">
+                <div class="challenge-confirm-actions">
+                    <button onclick="submitGameDate()">Guardar Data</button>
+                    <button class="btn-cancel" onclick="closeGameDateModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
 
         <!-- View: Inserção de Resultado -->
         <section id="resultView" class="tab-content hidden">
@@ -96,6 +195,20 @@
                 </div>
             </div>
         </section>
+
+        <button class="btn-logout-mobile" onclick="logout()">Terminar Sessão</button>
+
+        <!-- Modal de Confirmação de Resultado -->
+        <div id="resultConfirmModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Confirmar Resultado</h2>
+                <div id="resultConfirmBody"></div>
+                <div class="challenge-confirm-actions">
+                    <button onclick="confirmResult()">Confirmar</button>
+                    <button class="btn-cancel" onclick="closeResultConfirmModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Modal de Desafio -->
         <div id="challengeModal" class="modal hidden">

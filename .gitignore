@@ -1,9 +1,8 @@
 # Logs
 *.log
 
-# Dados de backup
-dados/*.backup
-dados/backup/
+# Node
+node_modules/
 
 # Cache
 __pycache__/
@@ -23,3 +22,14 @@ Thumbs.db
 # Dados temporários
 temp/
 tmp/
+
+desafios.json
+duplas.json
+jogadores.json
+
+passwords.txt
+
+.env
+player-auth-credentials.csv
+create-player-auth.sh
+create-player-auth.bat

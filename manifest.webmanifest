@@ -1,0 +1,25 @@
+{
+  "name": "Torneio Escada",
+  "short_name": "TorneioEscada",
+  "description": "Gestao do torneio de padel em modo escada.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2e2e2e",
+  "lang": "pt-PT",
+  "icons": [
+    {
+      "src": "/images/magic-logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/magic-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

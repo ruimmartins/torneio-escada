@@ -4,157 +4,209 @@ let duplas = [];
 let desafios = [];
 let selectedPlayerId = null;
 let selectedTeamId = null;
-let challengesViewMode = 'current';
+let challengesScopeFilter = 'mine';   // 'mine' | 'all'
+let challengesStatusFilter = 'current'; // 'current' | 'past'
+let currentUser = null;
+let pendingGameDate = null;
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
-    await loadCSVData();
-    initializeApp();
+    registerServiceWorker();
+    await initializeApp();
 });
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+        return;
+    }
+
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js').catch((error) => {
+            console.error('Erro ao registar service worker:', error);
+        });
+    });
+}
 
 async function loadCSVData() {
     try {
-        jogadores = await loadCSV('dados/jogadores.csv');
-        duplas = await loadCSV('dados/duplas.csv');
-        desafios = await loadCSV('dados/desafios.csv');
+        const [jogadoresData, duplasData, desafiosData] = await Promise.all([
+            loadJSON('/api/jogadores'),
+            loadJSON('/api/duplas'),
+            loadJSON('/api/desafios')
+        ]);
+
+        jogadores = jogadoresData;
+        duplas = duplasData;
+        desafios = desafiosData;
     } catch (error) {
         console.error('Erro ao carregar dados:', error);
         alert('Erro ao carregar dados do servidor');
     }
 }
 
-async function loadCSV(path) {
+async function loadJSON(path) {
     const response = await fetch(path);
-    const csv = await response.text();
-    const lines = csv.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
-    const data = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim()) {
-            // Parse CSV com suporte a campos entre aspas
-            const values = [];
-            let current = '';
-            let insideQuotes = false;
-            
-            for (let j = 0; j < lines[i].length; j++) {
-                const char = lines[i][j];
-                if (char === '"') {
-                    insideQuotes = !insideQuotes;
-                } else if (char === ',' && !insideQuotes) {
-                    values.push(current.trim());
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            values.push(current.trim());
-            
-            const obj = {};
-            headers.forEach((header, index) => {
-                const value = values[index] !== undefined ? values[index] : '';
-                // Converter para número se possível, senão deixar como string
-                obj[header] = (value === '' || isNaN(value)) ? value : Number(value);
-            });
-            data.push(obj);
-        }
+    if (!response.ok) {
+        throw new Error(`Erro ao carregar ${path}: ${response.status}`);
     }
-    
-    return data;
+
+    return response.json();
 }
 
-function initializeApp() {
-    // Verificar se há jogador guardado nos cookies
-    const savedPlayerId = getCookie('selectedPlayerId');
-    const savedTeamId = getCookie('selectedTeamId');
-    
-    if (savedPlayerId && savedTeamId) {
-        selectedPlayerId = Number(savedPlayerId);
-        selectedTeamId = Number(savedTeamId);
+async function initializeApp() {
+    setAuthLoading(true, 'A verificar sessão...');
+
+    try {
+        const me = await getCurrentSession();
+        currentUser = me.user;
+        selectedPlayerId = Number(currentUser.player_id);
+        selectedTeamId = Number(currentUser.team_id);
+
+        await loadCSVData();
         showMainLayout();
-    } else {
-        showPlayerSelectionModal();
+    } catch (_error) {
+        showLoginModal();
+    } finally {
+        setAuthLoading(false);
     }
 }
 
-// ==================== COOKIES ====================
-function getCookie(name) {
-    const nameEQ = name + "=";
-    const ca = document.cookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-        let c = ca[i].trim();
-        if (c.indexOf(nameEQ) === 0) {
-            return c.substring(nameEQ.length, c.length);
-        }
-    }
-    return null;
-}
+// ==================== AUTH ====================
+function setAuthLoading(isLoading, message = 'A processar...') {
+    const loadingElement = document.getElementById('authLoading');
+    const loadingTextElement = document.getElementById('authLoadingText');
 
-function setCookie(name, value, days = 365) {
-    const date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    const expires = "expires=" + date.toUTCString();
-    document.cookie = name + "=" + value + ";" + expires + ";path=/";
-}
-
-function deleteCookie(name) {
-    setCookie(name, '', -1);
-}
-
-// ==================== SELEÇÃO DE JOGADOR ====================
-function showPlayerSelectionModal() {
-    const modal = document.getElementById('playerModal');
-    const select = document.getElementById('playerSelect');
-    
-    select.innerHTML = '<option value="">Escolha um jogador...</option>';
-    
-    // Ordenar jogadores por nome
-    const sortedPlayers = [...jogadores].sort((a, b) => a.nome.localeCompare(b.nome));
-    
-    sortedPlayers.forEach(jogador => {
-        const option = document.createElement('option');
-        option.value = jogador.id;
-        option.textContent = jogador.nome;
-        select.appendChild(option);
-    });
-    
-    modal.classList.remove('hidden');
-}
-
-function selectPlayer() {
-    const select = document.getElementById('playerSelect');
-    const playerId = Number(select.value);
-    
-    if (!playerId) {
-        alert('Selecione um jogador');
+    if (!loadingElement) {
         return;
     }
-    
-    const jogador = jogadores.find(j => j.id === playerId);
-    const teamId = jogador.dupla_id;
-    
-    selectedPlayerId = playerId;
-    selectedTeamId = teamId;
-    
-    setCookie('selectedPlayerId', playerId);
-    setCookie('selectedTeamId', teamId);
-    
-    showMainLayout();
+
+    if (loadingTextElement) {
+        loadingTextElement.textContent = message;
+    }
+
+    loadingElement.classList.toggle('hidden', !isLoading);
 }
 
-function changePlayer() {
-    deleteCookie('selectedPlayerId');
-    deleteCookie('selectedTeamId');
+function setLoginLoading(isLoading) {
+    const usernameInput = document.getElementById('loginUsername');
+    const passwordInput = document.getElementById('loginPassword');
+    const togglePasswordButton = document.getElementById('toggleLoginPasswordBtn');
+    const submitButton = document.getElementById('loginSubmitBtn');
+
+    if (usernameInput) {
+        usernameInput.disabled = isLoading;
+    }
+
+    if (passwordInput) {
+        passwordInput.disabled = isLoading;
+    }
+
+    if (togglePasswordButton) {
+        togglePasswordButton.disabled = isLoading;
+    }
+
+    if (submitButton) {
+        submitButton.disabled = isLoading;
+        submitButton.textContent = isLoading ? 'A entrar...' : 'Entrar';
+    }
+}
+
+function showLoginModal() {
+    const modal = document.getElementById('loginModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+function hideLoginModal() {
+    const modal = document.getElementById('loginModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+async function getCurrentSession() {
+    const response = await fetch('/api/auth/me');
+    if (!response.ok) {
+        throw new Error('Sessão inválida');
+    }
+
+    return response.json();
+}
+
+async function login() {
+    const usernameInput = document.getElementById('loginUsername');
+    const passwordInput = document.getElementById('loginPassword');
+    const username = (usernameInput?.value || '').trim();
+    const password = passwordInput?.value || '';
+
+    if (!username || !password) {
+        alert('Preencha utilizador e password.');
+        return;
+    }
+
+    setLoginLoading(true);
+
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (!response.ok) {
+            throw new Error('Credenciais inválidas');
+        }
+
+        const result = await response.json();
+        currentUser = result.user;
+        selectedPlayerId = Number(currentUser.player_id);
+        selectedTeamId = Number(currentUser.team_id);
+
+        await loadCSVData();
+        showMainLayout();
+    } catch (error) {
+        alert('Não foi possível entrar: ' + error.message);
+    } finally {
+        setLoginLoading(false);
+    }
+}
+
+function toggleLoginPasswordVisibility() {
+    const passwordInput = document.getElementById('loginPassword');
+    const toggleBtn = document.getElementById('toggleLoginPasswordBtn');
+
+    if (!passwordInput || !toggleBtn) {
+        return;
+    }
+
+    const showPassword = passwordInput.type === 'password';
+    passwordInput.type = showPassword ? 'text' : 'password';
+    toggleBtn.textContent = showPassword ? 'Ocultar' : 'Mostrar';
+}
+
+async function logout() {
+    try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (_error) {
+        // Ignora erro de logout para permitir limpar UI local.
+    }
+
+    currentUser = null;
     selectedPlayerId = null;
     selectedTeamId = null;
-    
+    jogadores = [];
+    duplas = [];
+    desafios = [];
+
     document.getElementById('mainLayout').classList.add('hidden');
-    showPlayerSelectionModal();
+    showLoginModal();
 }
 
 function showMainLayout() {
-    const modal = document.getElementById('playerModal');
-    modal.classList.add('hidden');
+    hideLoginModal();
     
     const mainLayout = document.getElementById('mainLayout');
     mainLayout.classList.remove('hidden');
@@ -170,18 +222,170 @@ function showMainLayout() {
     document.getElementById('currentPlayer').textContent = `${jogador.nome} (Dupla: ${nomesDupla})`;
     
     // Carregar tab de classificação por padrão
+    renderAlerts();
     renderClassification();
+}
+
+// ==================== ALERTAS ====================
+function daysBetween(dateStrA, dateStrB) {
+    const a = new Date(dateStrA + 'T00:00:00');
+    const b = new Date(dateStrB + 'T00:00:00');
+    return Math.floor((b - a) / (1000 * 60 * 60 * 24));
+}
+
+function renderAlerts() {
+    const today = new Date().toISOString().split('T')[0];
+
+    const pending = desafios.filter(d => !hasChallengeResult(d));
+    const pendingWithoutGameDate = pending.filter(d => !d.data_jogo);
+    const pendingWithPastGameDate = pending
+        .filter(d => d.data_jogo && d.data_jogo < today)
+        .map(d => ({ ...d, dias: daysBetween(d.data_jogo, today) }))
+        .sort((a, b) => b.dias - a.dias);
+
+    function renderAlertTable(blockId, bodyId, rows, renderRow) {
+        const block = document.getElementById(blockId);
+        const body  = document.getElementById(bodyId);
+        body.innerHTML = '';
+        if (rows.length > 0) {
+            rows.forEach(row => body.appendChild(renderRow(row)));
+            block.classList.remove('hidden');
+        } else {
+            block.classList.add('hidden');
+        }
+
+        return rows.length > 0;
+    }
+
+    let hasAnyAlerts = false;
+
+    const makeDesafioRow = (labelDias) => (d) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td data-label="Dupla 1">${getTeamName(d.dupla_1_id)}</td>
+            <td data-label="Dupla 2">${getTeamName(d.dupla_2_id)}</td>
+            <td data-label="Data Desafio">${formatDate(d.data_desafio)}</td>
+            <td data-label="${labelDias}">${d.dias}</td>
+        `;
+        return tr;
+    };
+
+    hasAnyAlerts = renderAlertTable(
+        'alertGameDateOverdue', 'alertGameDateOverdueBody',
+        pendingWithPastGameDate,
+        (d) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td data-label="Dupla 1">${getTeamName(d.dupla_1_id)}</td>
+                <td data-label="Dupla 2">${getTeamName(d.dupla_2_id)}</td>
+                <td data-label="Data Jogo">${formatDate(d.data_jogo)}</td>
+                <td data-label="Dias de atraso">${d.dias}</td>
+            `;
+            return tr;
+        }
+    ) || hasAnyAlerts;
+
+    // Tabela 1: > 16 dias sem resultado
+    hasAnyAlerts = renderAlertTable(
+        'alertOverdue', 'alertOverdueBody',
+        pendingWithoutGameDate
+            .filter(d => d.data_desafio)
+            .map(d => ({ ...d, dias: daysBetween(d.data_desafio, today) }))
+            .filter(d => d.dias > 16)
+            .sort((a, b) => b.dias - a.dias),
+        makeDesafioRow('Dias em atraso')
+    ) || hasAnyAlerts;
+
+    // Tabela 2: entre 12 e 16 dias sem resultado
+    hasAnyAlerts = renderAlertTable(
+        'alertOverdueWarning', 'alertOverdueWarningBody',
+        pendingWithoutGameDate
+            .filter(d => d.data_desafio)
+            .map(d => ({ ...d, dias: daysBetween(d.data_desafio, today) }))
+            .filter(d => d.dias >= 12 && d.dias <= 16)
+            .sort((a, b) => b.dias - a.dias),
+        makeDesafioRow('Dias em aberto')
+    ) || hasAnyAlerts;
+
+    // --- duplas ativas sem desafio em curso: calcular dias desde o último jogo concluído ---
+    const teamIdsWithOngoing = new Set();
+    pending.forEach(d => {
+        teamIdsWithOngoing.add(d.dupla_1_id);
+        teamIdsWithOngoing.add(d.dupla_2_id);
+    });
+
+    const duplasComUltimoJogo = duplas
+        .filter(d => d.active !== false && !teamIdsWithOngoing.has(d.dupla_id))
+        .map(dupla => {
+            const jogosConc = desafios
+                .filter(d =>
+                    (d.dupla_1_id === dupla.dupla_id || d.dupla_2_id === dupla.dupla_id) &&
+                    d.data_resultado && d.data_resultado !== ''
+                )
+                .sort((a, b) => (a.data_resultado < b.data_resultado ? 1 : -1));
+
+            if (jogosConc.length === 0) return null;
+
+            const ultimoJogo = jogosConc[0].data_resultado;
+            return { dupla, ultimoJogo, dias: daysBetween(ultimoJogo, today) };
+        })
+        .filter(Boolean);
+
+    const makeInativaRow = ({ dupla, ultimoJogo, dias }) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td data-label="Dupla">${getTeamName(dupla.dupla_id)}</td>
+            <td data-label="Último jogo">${formatDate(ultimoJogo)}</td>
+            <td data-label="Dias sem jogar">${dias}</td>
+        `;
+        return tr;
+    };
+
+    // Tabela 3: > 30 dias sem jogar
+    hasAnyAlerts = renderAlertTable(
+        'alertInactive', 'alertInactiveBody',
+        duplasComUltimoJogo.filter(x => x.dias > 30).sort((a, b) => b.dias - a.dias),
+        makeInativaRow
+    ) || hasAnyAlerts;
+
+    // Tabela 4: entre 15 e 30 dias sem jogar
+    hasAnyAlerts = renderAlertTable(
+        'alertInactiveWarning', 'alertInactiveWarningBody',
+        duplasComUltimoJogo.filter(x => x.dias >= 15 && x.dias <= 30).sort((a, b) => b.dias - a.dias),
+        makeInativaRow
+    ) || hasAnyAlerts;
+
+    const alertsTab = document.getElementById('alertsTab');
+    if (alertsTab) {
+        alertsTab.classList.toggle('hidden', !hasAnyAlerts);
+    }
+
+    const alertsView = document.getElementById('alertsView');
+    if (!hasAnyAlerts && alertsView?.classList.contains('active')) {
+        document.getElementById('classificationTab').classList.add('active');
+        document.getElementById('challengesTab').classList.remove('active');
+        alertsTab?.classList.remove('active');
+        document.getElementById('classificationView').classList.add('active');
+        document.getElementById('challengesView').classList.remove('active');
+        alertsView.classList.remove('active');
+        document.getElementById('resultView').classList.remove('active');
+        renderClassification();
+    }
 }
 
 // ==================== TABS ====================
 function switchTab(tabName) {
+    renderAlerts();
+
     // Actualizar botões de tabs
     document.getElementById('classificationTab').classList.toggle('active', tabName === 'classification');
     document.getElementById('challengesTab').classList.toggle('active', tabName === 'challenges');
+    document.getElementById('alertsTab')?.classList.toggle('active', tabName === 'alerts');
     
     // Actualizar conteúdo das tabs
     document.getElementById('classificationView').classList.toggle('active', tabName === 'classification');
     document.getElementById('challengesView').classList.toggle('active', tabName === 'challenges');
+    document.getElementById('alertsView')?.classList.toggle('active', tabName === 'alerts');
     document.getElementById('resultView').classList.remove('active');
     
     // Render
@@ -190,6 +394,8 @@ function switchTab(tabName) {
     } else if (tabName === 'challenges') {
         updateChallengesFilterButtons();
         renderChallenges();
+    } else if (tabName === 'alerts') {
+        renderAlerts();
     }
 }
 
@@ -197,30 +403,100 @@ function hasChallengeResult(desafio) {
     return Boolean(desafio.data_resultado && desafio.data_resultado !== '');
 }
 
-function updateChallengesFilterButtons() {
-    const btnCurrent = document.getElementById('filterCurrentBtn');
-    const btnPast = document.getElementById('filterPastBtn');
-    const btnAll = document.getElementById('filterAllBtn');
-
-    if (!btnCurrent || !btnPast || !btnAll) {
-        return;
-    }
-
-    btnCurrent.classList.toggle('active', challengesViewMode === 'current');
-    btnPast.classList.toggle('active', challengesViewMode === 'past');
-    btnAll.classList.toggle('active', challengesViewMode === 'all');
+function hasChallengeGameDate(desafio) {
+    return Boolean(desafio.data_jogo && desafio.data_jogo !== '');
 }
 
-function setChallengesViewMode(mode) {
-    challengesViewMode = mode;
+function updateChallengesFilterButtons() {
+    document.getElementById('filterMineBtn')?.classList.toggle('active', challengesScopeFilter === 'mine');
+    document.getElementById('filterAllBtn')?.classList.toggle('active', challengesScopeFilter === 'all');
+    document.getElementById('filterCurrentBtn')?.classList.toggle('active', challengesStatusFilter === 'current');
+    document.getElementById('filterPastBtn')?.classList.toggle('active', challengesStatusFilter === 'past');
+}
+
+function setChallengesScopeFilter(scope) {
+    challengesScopeFilter = scope;
     updateChallengesFilterButtons();
     renderChallenges();
+}
+
+function setChallengesStatusFilter(status) {
+    challengesStatusFilter = status;
+    updateChallengesFilterButtons();
+    renderChallenges();
+}
+
+function isTeamInactive(duplaId) {
+    const team = duplas.find(d => Number(d.dupla_id) === Number(duplaId));
+    if (team && team.active === false) {
+        return true;
+    }
+
+    const playersInTeam = jogadores.filter(j => Number(j.dupla_id) === Number(duplaId));
+    return playersInTeam.some(j => j.ativo === false || j.ativo === 'false' || Number(j.ativo) === 0);
+}
+
+function hasOngoingChallenge(duplaId) {
+    return desafios.some(d =>
+        (d.dupla_1_id === duplaId || d.dupla_2_id === duplaId) &&
+        (!d.data_resultado || d.data_resultado === '')
+    );
+}
+
+function getClassificationRowClass(duplaId) {
+    if (duplaId === selectedTeamId) {
+        return 'classification-row-own';
+    }
+
+    if (isTeamInactive(duplaId)) {
+        return 'classification-row-inactive';
+    }
+
+    if (hasOngoingChallenge(duplaId)) {
+        return 'classification-row-ongoing';
+    }
+
+    return '';
 }
 
 // ==================== CLASSIFICAÇÃO ====================
 function renderClassification() {
     const tbody = document.getElementById('classificationBody');
     tbody.innerHTML = '';
+
+    const currentChallengeContainer = document.getElementById('currentChallengeContainer');
+    const currentChallengeBody = document.getElementById('currentChallengeBody');
+    if (currentChallengeContainer && currentChallengeBody) {
+        currentChallengeBody.innerHTML = '';
+
+        const desafioAtual = desafios
+            .filter(d => !hasChallengeResult(d) && (d.dupla_1_id === selectedTeamId || d.dupla_2_id === selectedTeamId))
+            .sort((a, b) => (a.data_desafio < b.data_desafio ? 1 : -1))[0];
+
+        if (desafioAtual) {
+            const globalIndex = desafios.indexOf(desafioAtual);
+            const nome1 = getTeamName(desafioAtual.dupla_1_id);
+            const nome2 = getTeamName(desafioAtual.dupla_2_id);
+            const nome1WithPoints = `${nome1} (${desafioAtual.dupla_1_pontos_desafio}pts)`;
+            const nome2WithPoints = `${nome2} (${desafioAtual.dupla_2_pontos_desafio}pts)`;
+            const defineDateBtn = `<button class="btn-set-game-date" onclick="openGameDateModal(${globalIndex})">${hasChallengeGameDate(desafioAtual) ? 'Editar Data de Jogo' : 'Definir Data de Jogo'}</button>`;
+            const resultBtn = hasChallengeGameDate(desafioAtual)
+                ? `<button class="btn-result" onclick="openResultViewByGlobalIndex(${globalIndex})">Inserir Resultado</button>`
+                : '';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td data-label="Dupla 1">${nome1WithPoints}</td>
+                <td data-label="Dupla 2">${nome2WithPoints}</td>
+                <td data-label="Data">Desafio: ${formatDate(desafioAtual.data_desafio)}${hasChallengeGameDate(desafioAtual) ? `<br>Jogo: ${formatDate(desafioAtual.data_jogo)}` : '<br>Jogo: por definir'}</td>
+                <td data-label="Resultado">${defineDateBtn}${resultBtn}</td>
+            `;
+            currentChallengeBody.appendChild(tr);
+            currentChallengeContainer.classList.remove('hidden');
+        } else {
+            currentChallengeContainer.classList.add('hidden');
+        }
+    }
     
     // Calcular posições e número de jogos para cada dupla
     const duplasComEstatisticas = duplas.map(dupla => {
@@ -249,6 +525,10 @@ function renderClassification() {
     // Renderizar tabela
     duplasComEstatisticas.forEach((dupla, index) => {
         const tr = document.createElement('tr');
+        const rowClass = getClassificationRowClass(dupla.dupla_id);
+        if (rowClass) {
+            tr.classList.add(rowClass);
+        }
         
         // Verificar se pode desafiar
         const podeDesafiar = canChallenge(dupla, posicaoUtilizador, index);
@@ -256,6 +536,7 @@ function renderClassification() {
         tr.innerHTML = `
             <td data-label="Pos.">${index + 1}</td>
             <td data-label="Dupla">${dupla.nome}</td>
+            <td data-label="Jogos">${dupla.jogos ?? 0}</td>
             <td data-label="Pts.">${dupla.pontos}</td>
             <td data-label="" class="action-cell">
                 ${dupla.dupla_id === selectedTeamId 
@@ -272,6 +553,10 @@ function renderClassification() {
 function canChallenge(targetTeam, posicaoUtilizador, posicaoAlvo) {
     // Não pode desafiar sua própria dupla
     if (targetTeam.dupla_id === selectedTeamId) {
+        return false;
+    }
+
+    if (isTeamInactive(targetTeam.dupla_id)) {
         return false;
     }
     
@@ -299,20 +584,14 @@ function renderChallenges() {
     
     const desafioEnvolveUtilizador = (d) => d.dupla_1_id === selectedTeamId || d.dupla_2_id === selectedTeamId;
 
-    // Em "Todos" mostra desafios globais; nos outros modos mantém foco na dupla do utilizador.
-    const desafiosBase = challengesViewMode === 'all'
-        ? desafios
-        : desafios.filter(desafioEnvolveUtilizador);
+    const desafiosBase = challengesScopeFilter === 'mine'
+        ? desafios.filter(desafioEnvolveUtilizador)
+        : desafios;
 
     const desafiosFiltrados = desafiosBase.filter(d => {
-        if (challengesViewMode === 'past') {
+        if (challengesStatusFilter === 'past') {
             return hasChallengeResult(d);
         }
-
-        if (challengesViewMode === 'all') {
-            return true;
-        }
-
         return !hasChallengeResult(d);
     });
     
@@ -334,7 +613,11 @@ function renderChallenges() {
             `;
         } else {
             if (desafioEnvolveUtilizador(desafio)) {
-                resultadoHTML = `<button class="btn-result" onclick="openResultViewByGlobalIndex(${desafios.indexOf(desafio)})">Inserir Resultado</button>`;
+                const defineDateBtn = `<button class="btn-set-game-date" onclick="openGameDateModal(${desafios.indexOf(desafio)})">${hasChallengeGameDate(desafio) ? 'Editar Data de Jogo' : 'Definir Data de Jogo'}</button>`;
+                const resultBtn = hasChallengeGameDate(desafio)
+                    ? `<button class="btn-result" onclick="openResultViewByGlobalIndex(${desafios.indexOf(desafio)})">Inserir Resultado</button>`
+                    : '';
+                resultadoHTML = `${defineDateBtn}${resultBtn}`;
             } else {
                 resultadoHTML = '<span class="result-status pending">Em curso</span>';
             }
@@ -347,7 +630,7 @@ function renderChallenges() {
         tr.innerHTML = `
             <td data-label="Dupla 1">${nome1WithPoints}</td>
             <td data-label="Dupla 2">${nome2WithPoints}</td>
-            <td data-label="Data">${formatDate(desafio.data_desafio)}</td>
+            <td data-label="Data">Desafio: ${formatDate(desafio.data_desafio)}${hasChallengeGameDate(desafio) ? `<br>Jogo: ${formatDate(desafio.data_jogo)}` : '<br>Jogo: por definir'}</td>
             <td data-label="Resultado">${resultadoHTML}</td>
         `;
         
@@ -357,12 +640,9 @@ function renderChallenges() {
     if (desafiosFiltrados.length === 0) {
         const tr = document.createElement('tr');
         tr.className = 'empty-state';
-        const emptyText = challengesViewMode === 'past'
-            ? 'Nenhum desafio passado encontrado'
-            : challengesViewMode === 'all'
-                ? 'Nenhum desafio encontrado'
-                : 'Nenhum desafio em curso encontrado';
-        tr.innerHTML = `<td colspan="4" data-label="">${emptyText}</td>`;
+        const scopeLabel = challengesScopeFilter === 'mine' ? 'da sua dupla' : 'de todas as duplas';
+        const statusLabel = challengesStatusFilter === 'past' ? 'passados' : 'em curso';
+        tr.innerHTML = `<td colspan="4" data-label="">Nenhum desafio ${statusLabel} encontrado ${scopeLabel}</td>`;
         tbody.appendChild(tr);
     }
 }
@@ -380,7 +660,65 @@ function openResultViewByGlobalIndex(globalIndex) {
         return;
     }
 
+    if (!hasChallengeGameDate(desafio)) {
+        alert('Defina primeiro a data de jogo deste desafio.');
+        return;
+    }
+
     openResultView(globalIndex);
+}
+
+function openGameDateModal(desafioIndex) {
+    const desafio = desafios[desafioIndex];
+    if (!desafio || hasChallengeResult(desafio)) {
+        return;
+    }
+
+    const envolveUtilizador = desafio.dupla_1_id === selectedTeamId || desafio.dupla_2_id === selectedTeamId;
+    if (!envolveUtilizador) {
+        alert('Só pode definir data de jogo para desafios da sua dupla.');
+        return;
+    }
+
+    pendingGameDate = { desafioIndex };
+    document.getElementById('gameDateModalText').textContent = `Definir data de jogo para ${getTeamName(desafio.dupla_1_id)} vs ${getTeamName(desafio.dupla_2_id)}.`;
+    document.getElementById('gameDateInput').value = desafio.data_jogo || '';
+    document.getElementById('gameDateModal').classList.remove('hidden');
+}
+
+function closeGameDateModal() {
+    document.getElementById('gameDateModal').classList.add('hidden');
+    pendingGameDate = null;
+}
+
+async function submitGameDate() {
+    if (!pendingGameDate) {
+        return;
+    }
+
+    const input = document.getElementById('gameDateInput');
+    const dateValue = (input?.value || '').trim();
+    if (!dateValue) {
+        alert('Selecione a data de jogo.');
+        return;
+    }
+
+    const desafio = desafios[pendingGameDate.desafioIndex];
+    if (!desafio || !desafio._id) {
+        alert('Desafio inválido.');
+        return;
+    }
+
+    try {
+        const result = await updateChallengeGameDate(desafio._id, dateValue);
+        desafios[pendingGameDate.desafioIndex] = result.desafio || { ...desafio, data_jogo: dateValue };
+        closeGameDateModal();
+        renderAlerts();
+        renderClassification();
+        renderChallenges();
+    } catch (error) {
+        alert('Erro ao guardar data de jogo: ' + error.message);
+    }
 }
 
 function getTeamName(teamId) {
@@ -402,18 +740,22 @@ function formatDate(dateStr) {
 // ==================== MODAIS ====================
 function openChallengeModal(targetTeamId) {
     const targetTeam = duplas.find(d => d.dupla_id === targetTeamId);
+    if (!targetTeam || isTeamInactive(targetTeamId)) {
+        alert('Não é possível desafiar uma dupla inativa.');
+        return;
+    }
+
     const teamName = getTeamName(targetTeamId);
-    const myTeamName = getTeamName(selectedTeamId);
-    
+
     const form = document.getElementById('challengeForm');
     form.innerHTML = `
-        <p><strong>Desafiador:</strong> ${myTeamName}</p>
-        <p><strong>Desafiado:</strong> ${teamName}</p>
-        <label>Data do Desafio:</label>
-        <input type="date" id="challengeDate" required>
-        <button onclick="submitChallenge(${targetTeamId})">Confirmar Desafio</button>
+        <p>Tem a certeza que quer desafiar a dupla <strong>${teamName}</strong>?</p>
+        <div class="challenge-confirm-actions">
+            <button onclick="submitChallenge(${targetTeamId})">Sim, desafiar</button>
+            <button class="btn-cancel" onclick="closeChallengeModal()">Cancelar</button>
+        </div>
     `;
-    
+
     document.getElementById('challengeModal').classList.remove('hidden');
 }
 
@@ -421,15 +763,21 @@ function closeChallengeModal() {
     document.getElementById('challengeModal').classList.add('hidden');
 }
 
-function submitChallenge(targetTeamId) {
-    const dateInput = document.getElementById('challengeDate').value;
-    if (!dateInput) {
-        alert('Selecione uma data');
-        return;
-    }
-    
+async function submitChallenge(targetTeamId) {
+    const dateInput = new Date().toISOString().split('T')[0];
+
     const myTeam = duplas.find(d => d.dupla_id === selectedTeamId);
     const targetTeam = duplas.find(d => d.dupla_id === targetTeamId);
+
+    if (!myTeam || !targetTeam) {
+        alert('Dupla inválida.');
+        return;
+    }
+
+    if (isTeamInactive(targetTeamId) || myTeam.active === false) {
+        alert('Não é possível criar desafios com duplas inativas.');
+        return;
+    }
     
     // Criar novo desafio
     const novoDesafio = {
@@ -444,11 +792,18 @@ function submitChallenge(targetTeamId) {
         dupla_2_pontos_desafio: targetTeam.pontos
     };
     
-    desafios.push(novoDesafio);
-    updateCSV('desafios.csv', desafios);
+    try {
+        const result = await createChallenge(novoDesafio);
+        desafios.push(result.desafio || novoDesafio);
+    } catch (error) {
+        console.error('Erro ao criar desafio:', error);
+        alert('Erro ao criar desafio: ' + error.message);
+        return;
+    }
     
     alert('Desafio criado com sucesso!');
     closeChallengeModal();
+    renderAlerts();
     renderClassification();
 }
 
@@ -481,13 +836,50 @@ function openResultView(desafioIndex) {
             <input type="number" id="set2Team2" min="0" max="7" step="1" inputmode="numeric" placeholder="0-7">
             <input type="number" id="tieTeam2" min="0" step="1" inputmode="numeric" placeholder="0+">
         </div>
-        <p class="score-help">Validação: sets de 0 a 7; se houver 7, o adversário deve ter 5 ou 6. Tie-break de 0 a infinito; se um lado tiver mais de 10, a diferença deve ser 2.</p>
         
         <button onclick="submitResult(${tempIndex})">Guardar Resultado</button>
     `;
+
+    setupResultInputAutoAdvance();
     document.getElementById('classificationView').classList.remove('active');
     document.getElementById('challengesView').classList.remove('active');
     document.getElementById('resultView').classList.add('active');
+}
+
+function setupResultInputAutoAdvance() {
+    const order = ['set1Team1', 'set1Team2', 'set2Team1', 'set2Team2', 'tieTeam1', 'tieTeam2'];
+
+    order.forEach((id, index) => {
+        const input = document.getElementById(id);
+        if (!input) {
+            return;
+        }
+
+        input.addEventListener('input', () => {
+            if (input.value === '') {
+                return;
+            }
+
+            const digitsCount = String(input.value).replace(/\D/g, '').length;
+            const minDigitsToAdvance = id.startsWith('tie') ? 2 : 1;
+            if (digitsCount < minDigitsToAdvance) {
+                return;
+            }
+
+            const nextId = order[index + 1];
+            if (!nextId) {
+                return;
+            }
+
+            const nextInput = document.getElementById(nextId);
+            if (!nextInput) {
+                return;
+            }
+
+            nextInput.focus();
+            nextInput.select();
+        });
+    });
 }
 
 function backToChallenges() {
@@ -498,6 +890,8 @@ function backToChallenges() {
     document.getElementById('challengesTab').classList.add('active');
     renderChallenges();
 }
+
+let pendingResult = null;
 
 function submitResult(desafioIndex) {
     const desafio = desafios[desafioIndex];
@@ -517,33 +911,60 @@ function submitResult(desafioIndex) {
     }
 
     const winnerTeamId = validation.winner === 1 ? desafio.dupla_1_id : desafio.dupla_2_id;
-    
-    // Actualizar desafio
-    desafio.resultado_set_1 = `${Number(score.set1Team1)}-${Number(score.set1Team2)}`;
-    desafio.resultado_set_2 = `${Number(score.set2Team1)}-${Number(score.set2Team2)}`;
-    desafio.resultado_tie_break = validation.tieUsed ? `${Number(score.tieTeam1)}-${Number(score.tieTeam2)}` : '';
-    desafio.data_resultado = new Date().toISOString().split('T')[0];
-    
-    // Actualizar pontos
-    const dupla1 = duplas.find(d => d.dupla_id === desafio.dupla_1_id);
-    const dupla2 = duplas.find(d => d.dupla_id === desafio.dupla_2_id);
-    
-    if (winnerTeamId === desafio.dupla_1_id) {
-        // Dupla 1 venceu: adiciona pontos de dupla 2
-        dupla1.pontos += dupla2.pontos;
-        // Dupla 2 mantém os mesmos pontos
-    } else {
-        // Dupla 2 venceu: adiciona pontos de dupla 1
-        dupla2.pontos += dupla1.pontos;
-        // Dupla 1 mantém os mesmos pontos
+    const loserTeamId  = validation.winner === 1 ? desafio.dupla_2_id : desafio.dupla_1_id;
+
+    const set1 = `${Number(score.set1Team1)}-${Number(score.set1Team2)}`;
+    const set2 = `${Number(score.set2Team1)}-${Number(score.set2Team2)}`;
+    const tie  = validation.tieUsed ? `${Number(score.tieTeam1)}-${Number(score.tieTeam2)}` : '';
+    const resultadoStr = [set1, set2, tie ? `TB ${tie}` : ''].filter(Boolean).join(', ');
+
+    pendingResult = {
+        desafio,
+        winnerTeamId,
+        resultado_set_1: set1,
+        resultado_set_2: set2,
+        resultado_tie_break: tie
+    };
+
+    const body = document.getElementById('resultConfirmBody');
+    body.innerHTML = `
+        <div class="result-confirm-row"><span class="result-confirm-label">Vencedor</span><span class="result-confirm-winner">${getTeamName(winnerTeamId)}</span></div>
+        <div class="result-confirm-row"><span class="result-confirm-label">Vencido</span><span>${getTeamName(loserTeamId)}</span></div>
+        <div class="result-confirm-row"><span class="result-confirm-label">Resultado</span><span>${resultadoStr}</span></div>
+    `;
+
+    document.getElementById('resultConfirmModal').classList.remove('hidden');
+}
+
+function closeResultConfirmModal() {
+    document.getElementById('resultConfirmModal').classList.add('hidden');
+    pendingResult = null;
+}
+
+async function confirmResult() {
+    if (!pendingResult) {
+        return;
     }
-    
-    updateCSV('desafios.csv', desafios);
-    updateCSV('duplas.csv', duplas);
-    
-    alert('Resultado guardado com sucesso!');
-    backToChallenges();
-    renderClassification();
+
+    const { desafio, winnerTeamId, resultado_set_1, resultado_set_2, resultado_tie_break } = pendingResult;
+
+    desafio.resultado_set_1 = resultado_set_1;
+    desafio.resultado_set_2 = resultado_set_2;
+    desafio.resultado_tie_break = resultado_tie_break;
+    desafio.data_resultado = new Date().toISOString().split('T')[0];
+
+    closeResultConfirmModal();
+
+    saveChallengeResult(desafio, winnerTeamId)
+        .then(async () => {
+            duplas = await loadJSON('/api/duplas');
+            renderAlerts();
+            switchTab('classification');
+        })
+        .catch((error) => {
+            console.error('Erro ao guardar resultado:', error);
+            alert('Erro ao guardar resultado: ' + error.message);
+        });
 }
 
 function parseIntegerInput(value) {
@@ -569,6 +990,10 @@ function validateSetScore(a, b) {
 
     if (a === b) {
         return { ok: false, message: 'Um set não pode terminar empatado.' };
+    }
+
+    if (a < 6 && b < 6) {
+        return { ok: false, message: 'Num set, pelo menos uma equipa tem de ter 6 ou 7 jogos.' };
     }
 
     if (a === 7 || b === 7) {
@@ -648,28 +1073,67 @@ function validateMatchScore(score) {
     return { ok: true, winner: winsTeam1 > winsTeam2 ? 1 : 2, tieUsed: false };
 }
 
-// ==================== ATUALIZAR CSV ====================
-async function updateCSV(filename, data) {
-    try {
-        const response = await fetch('/api/update-csv', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                filename: filename,
-                data: data
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Erro ao atualizar: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        console.log('CSV atualizado:', result);
-    } catch (error) {
-        console.error('Erro ao atualizar CSV:', error);
-        alert('Erro ao guardar dados: ' + error.message);
+async function saveChallengeResult(desafio, winnerTeamId) {
+    if (!desafio._id) {
+        throw new Error('Desafio sem identificador (_id). Recarregue a página e tente novamente.');
     }
+
+    const response = await fetch(`/api/desafios/${desafio._id}/resultado`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            resultado_set_1: desafio.resultado_set_1,
+            resultado_set_2: desafio.resultado_set_2,
+            resultado_tie_break: desafio.resultado_tie_break,
+            data_resultado: desafio.data_resultado,
+            winner_team_id: winnerTeamId
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Erro ao guardar resultado: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+async function createChallenge(novoDesafio) {
+    const response = await fetch('/api/desafio/novo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(novoDesafio)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Erro ao criar desafio: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+async function updateChallengeGameDate(desafioId, dataJogo) {
+    const response = await fetch(`/api/desafio/${desafioId}/data-jogo`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ data_jogo: dataJogo })
+    });
+
+    if (!response.ok) {
+        let serverMessage = response.statusText;
+        try {
+            const payload = await response.json();
+            serverMessage = payload?.error || payload?.message || serverMessage;
+        } catch (_error) {
+            // Mantém statusText se não vier JSON
+        }
+        throw new Error(`Erro ao definir data de jogo: ${serverMessage}`);
+    }
+
+    return response.json();
 }
