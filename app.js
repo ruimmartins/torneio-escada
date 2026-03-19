@@ -21,9 +21,27 @@ function registerServiceWorker() {
     }
 
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js').catch((error) => {
-            console.error('Erro ao registar service worker:', error);
-        });
+        fetch('/api/version', { cache: 'no-store' })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Falha ao obter versão de deploy: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then((data) => {
+                const swVersion = encodeURIComponent(String(data?.version || 'dev'));
+                return navigator.serviceWorker.register(`/service-worker.js?v=${swVersion}`, {
+                    updateViaCache: 'none'
+                });
+            })
+            .catch((error) => {
+                console.error('Erro ao registar service worker:', error);
+                navigator.serviceWorker.register('/service-worker.js?v=dev', {
+                    updateViaCache: 'none'
+                }).catch((registerError) => {
+                    console.error('Erro no fallback de registo do service worker:', registerError);
+                });
+            });
     });
 }
 

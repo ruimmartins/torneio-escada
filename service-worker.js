@@ -1,4 +1,5 @@
-const CACHE_NAME = 'torneio-escada-v1';
+const SW_VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE_NAME = `torneio-escada-${SW_VERSION}`;
 const STATIC_ASSETS = [
   '/',
   '/index.html',

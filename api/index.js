@@ -119,6 +119,20 @@ function requireAuth(req, res, next) {
 
 // ==================== API ENDPOINTS ====================
 
+// GET /api/version
+app.get('/api/version', (_req, res) => {
+    const version =
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.VERCEL_URL ||
+        process.env.npm_package_version ||
+        'dev';
+
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.json({ version });
+});
+
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
     try {
