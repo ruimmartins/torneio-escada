@@ -475,6 +475,10 @@ header h1 {
     margin: 12px 12px 0;
 }
 
+.current-challenge-container.hidden {
+    display: none;
+}
+
 .classification-main-container {
     margin: 12px;
     border: 1px solid var(--border-color);
