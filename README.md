@@ -91,7 +91,7 @@ npm start
 ### Classificação
 - Visualize todas as duplas ordenadas por pontos
 - Veja posição, número de jogos e pontos
-- Clique em "Desafiar" para desafiar uma dupla (apenas duplas sem desafios em curso e entre 5 posições acima/abaixo)
+- Clique em "Desafiar" para desafiar uma dupla (apenas duplas sem desafios em curso; até 5 posições acima e sem limite para baixo)
 
 ### Desafios
 - Veja todos os desafios da sua dupla
@@ -118,7 +118,8 @@ O sistema de escada funciona da seguinte forma:
 ## Regras de Desafio
 
 - Só pode desafiar uma dupla sem desafios em curso
-- Só pode desafiar duplas entre 5 posições acima ou abaixo da sua
+- Só pode desafiar duplas até 5 posições acima da sua
+- Pode desafiar qualquer dupla abaixo da sua posição (sem limite)
 - Não pode desafiar sua própria dupla
 - Quando um desafio é criado, não pode ser criado outro até ter resultado
 

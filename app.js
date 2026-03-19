@@ -572,9 +572,13 @@ function canChallenge(targetTeam, posicaoUtilizador, posicaoAlvo) {
         return false;
     }
     
-    // Verificar se está dentro de 5 posições
-    const diferenca = Math.abs(posicaoUtilizador - posicaoAlvo);
-    return diferenca <= 5;
+    // Pode desafiar qualquer dupla abaixo; acima, apenas até 5 posições.
+    if (posicaoAlvo > posicaoUtilizador) {
+        return true;
+    }
+
+    const posicoesAcima = posicaoUtilizador - posicaoAlvo;
+    return posicoesAcima <= 5;
 }
 
 // ==================== DESAFIOS ====================
