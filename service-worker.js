@@ -31,6 +31,17 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+
+  // Ignora tudo que não seja http/https (ex: chrome-extension://)
+  if (!request.url.startsWith('http')) {
+    return;
+  }
+
+  // Ignora métodos que não sejam GET
+  if (request.method !== 'GET') {
+    return;
+  }
+
   const requestUrl = new URL(request.url);
 
   if (requestUrl.pathname.startsWith('/api/')) {
@@ -46,7 +57,7 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(request)
         .then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200 || request.method !== 'GET') {
+          if (!networkResponse || networkResponse.status !== 200) {
             return networkResponse;
           }
 

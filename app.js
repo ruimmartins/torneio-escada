@@ -1164,24 +1164,48 @@ async function updateChallengeGameDate(desafioId, dataJogo) {
 // ==================== PUSH NOTIFICATIONS ====================
 
 async function initializePushNotifications() {
-    if (!('serviceWorkerContainer' in navigator) || !('PushManager' in window)) {
-        console.log('Push notifications não suportadas neste dispositivo');
+    if (!('serviceWorker' in navigator)) {
+        console.log('[Push] serviceWorker não suportado');
+        return;
+    }
+    if (!('PushManager' in window)) {
+        console.log('[Push] PushManager não suportado');
+        return;
+    }
+    if (!('Notification' in window)) {
+        console.log('[Push] Notification API não suportada');
         return;
     }
 
+    console.log('[Push] Permissão actual:', Notification.permission);
+
     try {
         const registration = await navigator.serviceWorker.ready;
+        console.log('[Push] Service Worker pronto:', registration);
+
         const subscription = await registration.pushManager.getSubscription();
-        
-        if (!subscription) {
-            if (Notification.permission === 'granted') {
-                await subscribeToPush(registration);
-            } else if (Notification.permission !== 'denied') {
-                showPushNotificationPrompt(registration);
+        console.log('[Push] Subscrição existente:', subscription);
+
+        if (subscription) {
+            console.log('[Push] Já tem subscrição activa, nada a fazer');
+            return;
+        }
+
+        if (Notification.permission === 'granted') {
+            console.log('[Push] Permissão já concedida, a subscrever...');
+            const success = await subscribeToPush(registration);
+            if (!success) {
+                // VAPID não configurado localmente, mostra prompt de qualquer forma
+                console.log('[Push] Subscrição falhou (provavelmente sem VAPID local)');
             }
+        } else if (Notification.permission === 'denied') {
+            console.log('[Push] Permissão negada pelo utilizador, nada a fazer');
+        } else {
+            console.log('[Push] A mostrar prompt de notificações...');
+            showPushNotificationPrompt(registration);
         }
     } catch (error) {
-        console.error('Erro ao inicializar push notifications:', error);
+        console.error('[Push] Erro ao inicializar:', error);
     }
 }
 
@@ -1189,8 +1213,8 @@ async function subscribeToPush(registration) {
     try {
         const publicKeyResponse = await fetch('/api/push/public-key');
         if (!publicKeyResponse.ok) {
-            console.warn('Não foi possível obter chave pública para push');
-            return;
+            console.warn('[Push] Não foi possível obter chave pública:', publicKeyResponse.status);
+            return false;
         }
 
         const { publicKey } = await publicKeyResponse.json();
@@ -1205,9 +1229,11 @@ async function subscribeToPush(registration) {
             body: JSON.stringify({ subscription })
         });
 
-        console.log('✅ Subscrito a notificações push');
+        console.log('[Push] ✅ Subscrito com sucesso');
+        return true;
     } catch (error) {
-        console.error('Erro ao subscrever push:', error);
+        console.error('[Push] Erro ao subscrever:', error);
+        return false;
     }
 }
 
