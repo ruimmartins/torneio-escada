@@ -82,6 +82,7 @@ async function initializeApp() {
 
         await loadCSVData();
         showMainLayout();
+        initializePushNotifications();
     } catch (_error) {
         showLoginModal();
     } finally {
@@ -1158,4 +1159,105 @@ async function updateChallengeGameDate(desafioId, dataJogo) {
     }
 
     return response.json();
+}
+
+// ==================== PUSH NOTIFICATIONS ====================
+
+async function initializePushNotifications() {
+    if (!('serviceWorkerContainer' in navigator) || !('PushManager' in window)) {
+        console.log('Push notifications não suportadas neste dispositivo');
+        return;
+    }
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            if (Notification.permission === 'granted') {
+                await subscribeToPush(registration);
+            } else if (Notification.permission !== 'denied') {
+                showPushNotificationPrompt(registration);
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao inicializar push notifications:', error);
+    }
+}
+
+async function subscribeToPush(registration) {
+    try {
+        const publicKeyResponse = await fetch('/api/push/public-key');
+        if (!publicKeyResponse.ok) {
+            console.warn('Não foi possível obter chave pública para push');
+            return;
+        }
+
+        const { publicKey } = await publicKeyResponse.json();
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+        
+        await fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscription })
+        });
+
+        console.log('✅ Subscrito a notificações push');
+    } catch (error) {
+        console.error('Erro ao subscrever push:', error);
+    }
+}
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
+}
+
+function showPushNotificationPrompt(registration) {
+    const existingPrompt = document.getElementById('pushNotificationPrompt');
+    if (existingPrompt) {
+        return;
+    }
+
+    const btn = document.createElement('div');
+    btn.id = 'pushNotificationPrompt';
+    btn.innerHTML = '🔔 Ativar notificações de desafios e resultados?';
+    btn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #2e2e2e;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        z-index: 9999;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        font-weight: 500;
+        max-width: 280px;
+    `;
+    
+    btn.onclick = async (e) => {
+        e.stopPropagation();
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            await subscribeToPush(registration);
+        }
+        btn.remove();
+    };
+
+    document.body.appendChild(btn);
+
+    setTimeout(() => {
+        if (btn.parentNode) {
+            btn.remove();
+        }
+    }, 10000);
 }

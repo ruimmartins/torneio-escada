@@ -110,6 +110,75 @@ Se precisar voltar a uma versão anterior:
 2. Encontre o deployment anterior
 3. Clique em "..."  → "Promote to Production"
 
+## Configurar Push Notifications (Opcional)
+
+O sistema suporta notificações push web. Para ativar:
+
+### Gerar Chaves VAPID
+
+Execute localmente (apenas uma vez):
+
+```bash
+npm install --save-dev web-push
+npx web-push generate-vapid-keys
+```
+
+Output:
+```
+Public Key: BO3x8...
+Private Key: gH2a1...
+```
+
+### Adicionar Variáveis no Vercel
+
+1. Vá a Vercel → [seu-projeto] → Settings → Environment Variables
+2. Adicione 3 novas variáveis:
+   - **Name**: `VAPID_PUBLIC_KEY`
+     **Value**: (copie a Public Key gerada acima)
+   - **Name**: `VAPID_PRIVATE_KEY**
+     **Value**: (copie a Private Key gerada acima)
+   - **Name**: `VAPID_PUBLIC_EMAIL`
+     **Value**: `mailto:seu-email@example.com`
+
+3. Clique "Save"
+4. Faça redeploy manualmente ou aguarde próximo push de código
+
+### Verificar Status
+
+Após deploy:
+
+1. Abra a app em navegador (Chrome/Firefox/Edge)
+2. Aguarde login
+3. Deve aparecer prompt: "🔔 Ativar notificações de desafios e resultados?"
+4. Clique em "Sim"
+5. Permita notificações no browser
+
+### Testar
+
+Para testar manualmente (com curl):
+
+```bash
+# 1. Login e obter token
+curl -X POST https://seu-projeto.vercel.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"seu-user","password":"seu-pass"}' \
+  -c cookies.txt
+
+# 2. Criar novo desafio (deve enviar push)
+curl -X POST https://seu-projeto.vercel.app/api/desafio/novo \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "dupla_1_id": 1,
+    "dupla_2_id": 2,
+    "data_desafio": "2026-03-25",
+    "dupla_1_pontos_desafio": 100,
+    "dupla_2_pontos_desafio": 80
+  }'
+```
+
+Se push estiver ativo, jogadores subscritos receberão notificação.
+
 ---
 
-**Documentação:** [MongoDB Atlas](https://docs.atlas.mongodb.com) | [Vercel REST API](https://vercel.com/docs/rest-api)
+**Documentação:** [MongoDB Atlas](https://docs.atlas.mongodb.com) | [Vercel REST API](https://vercel.com/docs/rest-api) | [Web Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)

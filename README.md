@@ -5,8 +5,9 @@ Sistema de gerenciamento de torneio de padel em **modo escada** (ladder system) 
 ## ✨ Características
 
 - ✅ **Ranking dinâmico** - Sistema de classificação automático baseado em pontos
-- ✅ **Sistema de desafios** - Desafios entre duplas com validação de posição (máx 5)
+- ✅ **Sistema de desafios** - Desafios entre duplas com validação de posição (até 5 acima, sem limite para baixo)
 - ✅ **Scoring avançado** - Validação de tennis scoring (tennis rules)
+- ✅ **Push Notifications** - Receba notificações de novos desafios e resultados (web push)
 - ✅ **MongoDB** - Persistência em base de dados
 - ✅ **Cookies** - Login baseado em cookies (sem criar contas)
 - ✅ **Mobile-first** - Design responsivo otimizado para smartphone
@@ -98,6 +99,13 @@ npm start
 - Clique em "Inserir Resultado" para registar o resultado de um desafio
 - Visualize resultados de desafios já concluídos
 
+### Notificações Push (Opcional)
+- Quando fizer login, a app sugere ativar notificações
+- Receberá alertas em tempo real quando um novo desafio é criado
+- Receberá alertas quando um resultado é publicado
+- Compatível com Chrome, Firefox, Edge (desktop e Android)
+- Para ativar push notifications, o servidor deve ter VAPID keys configuradas (veja [DEPLOYMENT_VERCEL.md](DEPLOYMENT_VERCEL.md#configurar-push-notifications-opcional))
+
 ## Sistema de Pontuação
 
 O sistema de escada funciona da seguinte forma:
@@ -153,11 +161,12 @@ Para começar com dados novos, edite o script [seed-db.js](seed-db.js) e execute
 
 - [ ] Histórico de vitórias/derrotas por jogador
 - [ ] Estatísticas e gráficos (Charts.js)
-- [ ] Notificações de novos desafios
+- [x] **Notificações Push Web** - Notificações de novos desafios e resultados (implementado)
+- [ ] Notificações via WhatsApp (fase 2)
 - [ ] Sistema de convites (SMS/Email)
 - [ ] Dark mode
 - [ ] Internacionalização (EN/PT)
-- [ ] PWA (modo offline)
+- [ ] PWA (modo offline completo)
 - [ ] Fotos dos jogadores
 
 ## 📞 Suporte
