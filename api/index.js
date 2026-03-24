@@ -149,53 +149,6 @@ function requireAuth(req, res, next) {
 
 // ==================== PUSH NOTIFICATION HELPER ====================
 
-async function sendPushNotificationToTeams(duplaIds, title, body, tag = 'default', data = {}) {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-        console.warn('Push notifications desativadas: VAPID keys não configuradas');
-        return { sent: 0, failed: 0, errors: [] };
-    }
-
-    try {
-        await connectDB();
-        const jogadores = await Jogador.find({ dupla_id: { $in: duplaIds }, ativo: { $ne: false } });
-        const jogadorIds = jogadores.map(j => j._id);
-
-        const subscriptions = await PushSubscription.find({ jogador_id: { $in: jogadorIds } });
-        
-        let sent = 0;
-        let failed = 0;
-        const errors = [];
-
-        for (const sub of subscriptions) {
-            try {
-                await webpush.sendNotification(sub.subscription, JSON.stringify({
-                    title,
-                    body,
-                    tag,
-                    data
-                }));
-                sent++;
-                sub.lastActivated = new Date();
-                await sub.save();
-            } catch (error) {
-                failed++;
-                if (error.statusCode === 410 || error.statusCode === 404) {
-                    await PushSubscription.deleteOne({ _id: sub._id });
-                    console.log(`Subscription ${sub._id} removida (410/404)`);
-                } else {
-                    errors.push(error.message);
-                }
-            }
-        }
-
-        console.log(`Push enviadas: ${sent}, falhadas: ${failed}`);
-        return { sent, failed, errors };
-    } catch (error) {
-        console.error('Erro ao enviar push notifications:', error);
-        return { sent: 0, failed: 0, errors: [error.message] };
-    }
-}
-
 async function sendPushNotificationToAll(title, body, tag = 'default', data = {}) {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
         console.warn('Push notifications desativadas: VAPID keys não configuradas');

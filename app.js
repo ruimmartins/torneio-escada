@@ -20,6 +20,30 @@ function registerServiceWorker() {
         return;
     }
 
+    const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (isLocalhost) {
+        // Em desenvolvimento local, evita cache agressiva do SW para não servir JS antigo.
+        window.addEventListener('load', async () => {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map((registration) => registration.unregister()));
+
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(
+                        keys
+                            .filter((key) => key.startsWith('torneio-escada-'))
+                            .map((key) => caches.delete(key))
+                    );
+                }
+
+            } catch (error) {
+                console.error('Erro ao limpar Service Worker em localhost:', error);
+            }
+        });
+        return;
+    }
+
     window.addEventListener('load', () => {
         fetch('/api/version', { cache: 'no-store' })
             .then((response) => {
@@ -604,6 +628,32 @@ function canChallenge(targetTeam, posicaoUtilizador, posicaoAlvo) {
 function renderChallenges() {
     const tbody = document.getElementById('challengesBody');
     tbody.innerHTML = '';
+
+    const toSortableDateValue = (dateStr) => {
+        if (!dateStr) {
+            return Number.NEGATIVE_INFINITY;
+        }
+
+        const normalized = String(dateStr).trim();
+        if (!normalized) {
+            return Number.NEGATIVE_INFINITY;
+        }
+
+        // Formato ISO (YYYY-MM-DD)
+        if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
+            const [year, month, day] = normalized.split('-').map(Number);
+            return Date.UTC(year, month - 1, day);
+        }
+
+        // Formato pt-PT (DD/MM/YYYY), com ou sem zero à esquerda
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(normalized)) {
+            const [day, month, year] = normalized.split('/').map(Number);
+            return Date.UTC(year, month - 1, day);
+        }
+
+        const parsed = Date.parse(normalized);
+        return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+    };
     
     const desafioEnvolveUtilizador = (d) => d.dupla_1_id === selectedTeamId || d.dupla_2_id === selectedTeamId;
 
@@ -617,12 +667,50 @@ function renderChallenges() {
         }
         return !hasChallengeResult(d);
     });
+
+    const desafiosOrdenados = [...desafiosFiltrados].sort((a, b) => {
+        if (challengesStatusFilter === 'past') {
+            // Mais recentes por data de jogo.
+            const byGameDate = toSortableDateValue(b.data_jogo) - toSortableDateValue(a.data_jogo);
+            if (byGameDate !== 0) {
+                return byGameDate;
+            }
+
+            // Desempate por data de resultado.
+            const byResultDate = toSortableDateValue(b.data_resultado) - toSortableDateValue(a.data_resultado);
+            if (byResultDate !== 0) {
+                return byResultDate;
+            }
+
+            return String(b._id || '').localeCompare(String(a._id || ''));
+        }
+
+        const aHasGameDate = hasChallengeGameDate(a);
+        const bHasGameDate = hasChallengeGameDate(b);
+
+        // Em curso: primeiro os sem data de jogo
+        if (!aHasGameDate && bHasGameDate) {
+            return -1;
+        }
+
+        if (aHasGameDate && !bHasGameDate) {
+            return 1;
+        }
+
+        // Depois, os com data de jogo por ordem decrescente (mais recentes primeiro)
+        if (aHasGameDate && bHasGameDate) {
+            const byGameDate = String(b.data_jogo || '').localeCompare(String(a.data_jogo || ''));
+            if (byGameDate !== 0) {
+                return byGameDate;
+            }
+        }
+
+        // Desempate: desafio mais recente primeiro
+        return String(b.data_desafio || '').localeCompare(String(a.data_desafio || ''));
+    });
     
-    desafiosFiltrados.forEach(desafio => {
+    desafiosOrdenados.forEach(desafio => {
         // Obter informações das duplas
-        const dupla1 = duplas.find(d => d.dupla_id === desafio.dupla_1_id);
-        const dupla2 = duplas.find(d => d.dupla_id === desafio.dupla_2_id);
-        
         const nome1 = getTeamName(desafio.dupla_1_id);
         const nome2 = getTeamName(desafio.dupla_2_id);
         
@@ -653,14 +741,14 @@ function renderChallenges() {
         tr.innerHTML = `
             <td data-label="Dupla 1">${nome1WithPoints}</td>
             <td data-label="Dupla 2">${nome2WithPoints}</td>
-            <td data-label="Data">Desafio: ${formatDate(desafio.data_desafio)}${hasChallengeGameDate(desafio) ? `<br>Jogo: ${formatDate(desafio.data_jogo)}` : '<br>Jogo: por definir'}</td>
+            <td data-label="Data">Desafio: ${formatDate(desafio.data_desafio)}${hasChallengeGameDate(desafio) ? `<br>Jogo: ${formatDate(desafio.data_jogo)}` : '<br>Jogo: por definir'}${hasChallengeResult(desafio) ? `<br>Resultado: ${formatDate(desafio.data_resultado)}` : ''}</td>
             <td data-label="Resultado">${resultadoHTML}</td>
         `;
         
         tbody.appendChild(tr);
     });
     
-    if (desafiosFiltrados.length === 0) {
+    if (desafiosOrdenados.length === 0) {
         const tr = document.createElement('tr');
         tr.className = 'empty-state';
         const scopeLabel = challengesScopeFilter === 'mine' ? 'da sua dupla' : 'de todas as duplas';
@@ -1164,48 +1252,25 @@ async function updateChallengeGameDate(desafioId, dataJogo) {
 // ==================== PUSH NOTIFICATIONS ====================
 
 async function initializePushNotifications() {
-    if (!('serviceWorker' in navigator)) {
-        console.log('[Push] serviceWorker não suportado');
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
         return;
     }
-    if (!('PushManager' in window)) {
-        console.log('[Push] PushManager não suportado');
-        return;
-    }
-    if (!('Notification' in window)) {
-        console.log('[Push] Notification API não suportada');
-        return;
-    }
-
-    console.log('[Push] Permissão actual:', Notification.permission);
 
     try {
         const registration = await navigator.serviceWorker.ready;
-        console.log('[Push] Service Worker pronto:', registration);
-
         const subscription = await registration.pushManager.getSubscription();
-        console.log('[Push] Subscrição existente:', subscription);
 
         if (subscription) {
-            console.log('[Push] Já tem subscrição activa, nada a fazer');
             return;
         }
 
         if (Notification.permission === 'granted') {
-            console.log('[Push] Permissão já concedida, a subscrever...');
-            const success = await subscribeToPush(registration);
-            if (!success) {
-                // VAPID não configurado localmente, mostra prompt de qualquer forma
-                console.log('[Push] Subscrição falhou (provavelmente sem VAPID local)');
-            }
-        } else if (Notification.permission === 'denied') {
-            console.log('[Push] Permissão negada pelo utilizador, nada a fazer');
-        } else {
-            console.log('[Push] A mostrar prompt de notificações...');
+            await subscribeToPush(registration);
+        } else if (Notification.permission !== 'denied') {
             showPushNotificationPrompt(registration);
         }
     } catch (error) {
-        console.error('[Push] Erro ao inicializar:', error);
+        console.error('Erro ao inicializar notificações push:', error);
     }
 }
 
@@ -1213,7 +1278,6 @@ async function subscribeToPush(registration) {
     try {
         const publicKeyResponse = await fetch('/api/push/public-key');
         if (!publicKeyResponse.ok) {
-            console.warn('[Push] Não foi possível obter chave pública:', publicKeyResponse.status);
             return false;
         }
 
@@ -1222,17 +1286,16 @@ async function subscribeToPush(registration) {
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(publicKey)
         });
-        
+
         await fetch('/api/push/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ subscription })
         });
 
-        console.log('[Push] ✅ Subscrito com sucesso');
         return true;
     } catch (error) {
-        console.error('[Push] Erro ao subscrever:', error);
+        console.error('Erro ao subscrever notificações push:', error);
         return false;
     }
 }
