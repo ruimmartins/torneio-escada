@@ -562,11 +562,23 @@ function renderClassification() {
     // Ordenar por pontos (descendente)
     duplasComEstatisticas.sort((a, b) => b.pontos - a.pontos);
     
-    // Encontrar posição da dupla do utilizador
-    const posicaoUtilizador = duplasComEstatisticas.findIndex(d => d.dupla_id === selectedTeamId);
+    // Calcular rankings considerando empates (duplas com os mesmos pontos têm o mesmo ranking)
+    const duplasComRanking = duplasComEstatisticas.map((dupla, index) => {
+        let ranking = 1;
+        for (let i = 0; i < index; i++) {
+            if (duplasComEstatisticas[i].pontos > dupla.pontos) {
+                ranking = i + 1;
+            }
+        }
+        return { ...dupla, ranking };
+    });
+    
+    // Encontrar ranking da dupla do utilizador
+    const rankingUtilizador = duplasComRanking.find(d => d.dupla_id === selectedTeamId)?.ranking || 0;
     
     // Renderizar tabela
-    duplasComEstatisticas.forEach((dupla, index) => {
+    duplasComRanking.forEach((duplaData) => {
+        const dupla = duplaData;
         const tr = document.createElement('tr');
         const rowClass = getClassificationRowClass(dupla.dupla_id);
         if (rowClass) {
@@ -574,10 +586,10 @@ function renderClassification() {
         }
         
         // Verificar se pode desafiar
-        const podeDesafiar = canChallenge(dupla, posicaoUtilizador, index);
+        const podeDesafiar = canChallenge(dupla, rankingUtilizador, dupla.ranking);
         
         tr.innerHTML = `
-            <td data-label="Pos.">${index + 1}</td>
+            <td data-label="Pos.">${dupla.ranking}</td>
             <td data-label="Dupla">${dupla.nome}</td>
             <td data-label="Jogos">${dupla.jogos ?? 0}</td>
             <td data-label="Pts.">${dupla.pontos}</td>
@@ -593,7 +605,7 @@ function renderClassification() {
     });
 }
 
-function canChallenge(targetTeam, posicaoUtilizador, posicaoAlvo) {
+function canChallenge(targetTeam, rankingUtilizador, rankingAlvo) {
     // Não pode desafiar sua própria dupla
     if (targetTeam.dupla_id === selectedTeamId) {
         return false;
@@ -616,11 +628,11 @@ function canChallenge(targetTeam, posicaoUtilizador, posicaoAlvo) {
     }
     
     // Pode desafiar qualquer dupla abaixo; acima, apenas até 5 posições.
-    if (posicaoAlvo > posicaoUtilizador) {
+    if (rankingAlvo > rankingUtilizador) {
         return true;
     }
 
-    const posicoesAcima = posicaoUtilizador - posicaoAlvo;
+    const posicoesAcima = rankingUtilizador - rankingAlvo;
     return posicoesAcima <= 5;
 }
 
