@@ -562,15 +562,18 @@ function renderClassification() {
     // Ordenar por pontos (descendente)
     duplasComEstatisticas.sort((a, b) => b.pontos - a.pontos);
     
-    // Calcular rankings considerando empates (duplas com os mesmos pontos têm o mesmo ranking)
+    // Calcular rankings considerando empates (pontos iguais = mesma posição)
+    let ultimoPontos = null;
+    let rankingAtual = 0;
     const duplasComRanking = duplasComEstatisticas.map((dupla, index) => {
-        let ranking = 1;
-        for (let i = 0; i < index; i++) {
-            if (duplasComEstatisticas[i].pontos > dupla.pontos) {
-                ranking = i + 1;
-            }
+        if (index === 0) {
+            rankingAtual = 1;
+        } else if (dupla.pontos !== ultimoPontos) {
+            rankingAtual = index + 1;
         }
-        return { ...dupla, ranking };
+
+        ultimoPontos = dupla.pontos;
+        return { ...dupla, ranking: rankingAtual };
     });
     
     // Encontrar ranking da dupla do utilizador
