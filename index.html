@@ -56,6 +56,9 @@
             <button id="alertsTab" class="tab-button hidden" onclick="switchTab('alerts')">
                 Alertas
             </button>
+            <button id="adminTab" class="tab-button hidden" onclick="switchTab('admin')">
+                Admin
+            </button>
         </nav>
 
         <!-- Tab: Classificação -->
@@ -166,6 +169,43 @@
                     <table class="alert-table">
                         <thead><tr><th>Dupla</th><th>Último jogo</th><th>Dias sem jogar</th></tr></thead>
                         <tbody id="alertInactiveWarningBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab: Admin -->
+        <section id="adminView" class="tab-content hidden">
+            <div class="admin-container">
+                <h2>Painel de Administração</h2>
+
+                <div class="admin-section">
+                    <h3>Duplas</h3>
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Dupla</th>
+                                <th>Pontos</th>
+                                <th>Estado</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminDuplasBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Desafios em Curso</h3>
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Dupla 1</th>
+                                <th>Dupla 2</th>
+                                <th>Data Desafio</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminDesafiosBody"></tbody>
                     </table>
                 </div>
             </div>

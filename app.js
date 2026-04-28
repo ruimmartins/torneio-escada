@@ -267,6 +267,12 @@ function showMainLayout() {
     // Carregar tab de classificação por padrão
     renderAlerts();
     renderClassification();
+
+    // Mostrar tab de admin apenas para admins
+    const adminTab = document.getElementById('adminTab');
+    if (adminTab) {
+        adminTab.classList.toggle('hidden', !isAdmin());
+    }
 }
 
 // ==================== ALERTAS ====================
@@ -417,6 +423,12 @@ function renderAlerts() {
 }
 
 // ==================== TABS ====================
+const ADMIN_PLAYER_IDS = [2, 4];
+
+function isAdmin() {
+    return currentUser && ADMIN_PLAYER_IDS.includes(Number(currentUser.player_id));
+}
+
 function switchTab(tabName) {
     renderAlerts();
 
@@ -424,13 +436,15 @@ function switchTab(tabName) {
     document.getElementById('classificationTab').classList.toggle('active', tabName === 'classification');
     document.getElementById('challengesTab').classList.toggle('active', tabName === 'challenges');
     document.getElementById('alertsTab')?.classList.toggle('active', tabName === 'alerts');
-    
+    document.getElementById('adminTab')?.classList.toggle('active', tabName === 'admin');
+
     // Actualizar conteúdo das tabs
     document.getElementById('classificationView').classList.toggle('active', tabName === 'classification');
     document.getElementById('challengesView').classList.toggle('active', tabName === 'challenges');
     document.getElementById('alertsView')?.classList.toggle('active', tabName === 'alerts');
+    document.getElementById('adminView')?.classList.toggle('active', tabName === 'admin');
     document.getElementById('resultView').classList.remove('active');
-    
+
     // Render
     if (tabName === 'classification') {
         renderClassification();
@@ -439,6 +453,8 @@ function switchTab(tabName) {
         renderChallenges();
     } else if (tabName === 'alerts') {
         renderAlerts();
+    } else if (tabName === 'admin') {
+        renderAdmin();
     }
 }
 
@@ -1267,6 +1283,176 @@ async function updateChallengeGameDate(desafioId, dataJogo) {
     }
 
     return response.json();
+}
+
+// ==================== ADMIN ====================
+
+function renderAdmin() {
+    if (!isAdmin()) {
+        return;
+    }
+
+    renderAdminDuplas();
+    renderAdminDesafios();
+}
+
+function getNomeDupla(duplaId) {
+    const dupla = duplas.find(d => Number(d.dupla_id) === Number(duplaId));
+    if (!dupla) {
+        return `Dupla ${duplaId}`;
+    }
+    const nome1 = jogadores.find(j => j.id === dupla.integrante1_id)?.nome || '';
+    const nome2 = jogadores.find(j => j.id === dupla.integrante2_id)?.nome || '';
+    return `${nome1} / ${nome2}`;
+}
+
+function renderAdminDuplas() {
+    const tbody = document.getElementById('adminDuplasBody');
+    tbody.innerHTML = '';
+
+    const sorted = [...duplas].sort((a, b) => b.pontos - a.pontos);
+    sorted.forEach(dupla => {
+        const tr = document.createElement('tr');
+        const nome = getNomeDupla(dupla.dupla_id);
+        const estadoLabel = dupla.active === false ? 'Inativa' : 'Ativa';
+        const toggleLabel = dupla.active === false ? 'Ativar' : 'Desativar';
+
+        tr.innerHTML = `
+            <td>${nome}</td>
+            <td>${dupla.pontos}</td>
+            <td class="admin-estado ${dupla.active === false ? 'admin-estado-inativa' : 'admin-estado-ativa'}">${estadoLabel}</td>
+            <td class="admin-acoes">
+                <button class="btn-admin btn-admin-toggle" onclick="adminToggleAtivo(${dupla.dupla_id})">${toggleLabel}</button>
+                <button class="btn-admin btn-admin-pontos" onclick="adminReduzirPontos(${dupla.dupla_id}, 10)">-10%</button>
+                <button class="btn-admin btn-admin-pontos" onclick="adminReduzirPontos(${dupla.dupla_id}, 50)">-50%</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderAdminDesafios() {
+    const tbody = document.getElementById('adminDesafiosBody');
+    tbody.innerHTML = '';
+
+    const emCurso = desafios.filter(d => !hasChallengeResult(d));
+    if (emCurso.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="4" style="text-align:center;color:var(--text-muted, #888)">Sem desafios em curso</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    emCurso.forEach(desafio => {
+        const tr = document.createElement('tr');
+        const nomeDupla1 = getNomeDupla(desafio.dupla_1_id);
+        const nomeDupla2 = getNomeDupla(desafio.dupla_2_id);
+
+        tr.innerHTML = `
+            <td>${nomeDupla1}</td>
+            <td>${nomeDupla2}</td>
+            <td>${desafio.data_desafio || ''}</td>
+            <td class="admin-acoes">
+                <button class="btn-admin btn-admin-apagar" onclick="adminApagarDesafio('${desafio._id}')">Apagar</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function adminToggleAtivo(duplaId) {
+    if (!isAdmin()) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/admin/duplas/${duplaId}/toggle-active`, {
+            method: 'PATCH'
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            alert(data.error || 'Erro ao alterar estado da dupla');
+            return;
+        }
+
+        // Actualizar dados locais
+        const idx = duplas.findIndex(d => Number(d.dupla_id) === Number(duplaId));
+        if (idx !== -1) {
+            duplas[idx].active = data.dupla.active;
+        }
+        renderAdminDuplas();
+        renderClassification();
+    } catch (error) {
+        console.error('Erro ao alterar estado da dupla:', error);
+        alert('Erro ao alterar estado da dupla');
+    }
+}
+
+async function adminReduzirPontos(duplaId, percentagem) {
+    if (!isAdmin()) {
+        return;
+    }
+
+    const nomeDupla = getNomeDupla(duplaId);
+    if (!confirm(`Reduzir ${percentagem}% dos pontos de ${nomeDupla}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/admin/duplas/${duplaId}/reduzir-pontos`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ percentagem })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            alert(data.error || 'Erro ao reduzir pontos');
+            return;
+        }
+
+        // Actualizar dados locais
+        const idx = duplas.findIndex(d => Number(d.dupla_id) === Number(duplaId));
+        if (idx !== -1) {
+            duplas[idx].pontos = data.dupla.pontos;
+        }
+        renderAdminDuplas();
+        renderClassification();
+    } catch (error) {
+        console.error('Erro ao reduzir pontos:', error);
+        alert('Erro ao reduzir pontos');
+    }
+}
+
+async function adminApagarDesafio(desafioId) {
+    if (!isAdmin()) {
+        return;
+    }
+
+    if (!confirm('Apagar este desafio? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/admin/desafios/${desafioId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            alert(data.error || 'Erro ao apagar desafio');
+            return;
+        }
+
+        // Remover dos dados locais
+        const idx = desafios.findIndex(d => String(d._id) === String(desafioId));
+        if (idx !== -1) {
+            desafios.splice(idx, 1);
+        }
+        renderAdminDesafios();
+        renderClassification();
+    } catch (error) {
+        console.error('Erro ao apagar desafio:', error);
+        alert('Erro ao apagar desafio');
+    }
 }
 
 // ==================== PUSH NOTIFICATIONS ====================

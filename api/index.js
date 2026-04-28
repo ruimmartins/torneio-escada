@@ -723,5 +723,67 @@ app.post('/api/desafio/novo', requireAuth, async (req, res) => {
     }
 });
 
+// ==================== ADMIN ====================
+
+const ADMIN_PLAYER_IDS = [2, 4];
+
+function requireAdmin(req, res, next) {
+    const playerId = Number(req.auth && req.auth.player_id);
+    if (!ADMIN_PLAYER_IDS.includes(playerId)) {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
+    next();
+}
+
+// PATCH /api/admin/duplas/:id/toggle-active
+app.patch('/api/admin/duplas/:id/toggle-active', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await connectDB();
+        const dupla = await Dupla.findOne({ dupla_id: Number(req.params.id) });
+        if (!dupla) {
+            return res.status(404).json({ error: 'Dupla não encontrada' });
+        }
+        dupla.active = !dupla.active;
+        await dupla.save();
+        res.json({ status: 'ok', dupla });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PATCH /api/admin/duplas/:id/reduzir-pontos
+app.patch('/api/admin/duplas/:id/reduzir-pontos', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await connectDB();
+        const { percentagem } = req.body;
+        if (percentagem !== 10 && percentagem !== 50) {
+            return res.status(400).json({ error: 'Percentagem inválida. Use 10 ou 50.' });
+        }
+        const dupla = await Dupla.findOne({ dupla_id: Number(req.params.id) });
+        if (!dupla) {
+            return res.status(404).json({ error: 'Dupla não encontrada' });
+        }
+        dupla.pontos = Math.ceil(dupla.pontos * (1 - percentagem / 100));
+        await dupla.save();
+        res.json({ status: 'ok', dupla });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /api/admin/desafios/:id
+app.delete('/api/admin/desafios/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await connectDB();
+        const desafio = await Desafio.findByIdAndDelete(req.params.id);
+        if (!desafio) {
+            return res.status(404).json({ error: 'Desafio não encontrado' });
+        }
+        res.json({ status: 'ok' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Export para Vercel
 module.exports = app;

@@ -1100,3 +1100,101 @@ table tbody tr:last-child td {
         border-radius: 10px;
     }
 }
+
+/* ==================== ADMIN PANEL ==================== */
+
+.admin-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.admin-container h2 {
+    margin-bottom: 20px;
+    font-size: 20px;
+}
+
+.admin-section {
+    margin-bottom: 32px;
+}
+
+.admin-section h3 {
+    font-size: 16px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    padding-bottom: 6px;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.admin-table th,
+.admin-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.admin-table th {
+    font-weight: 600;
+    background-color: var(--header-bg, #f5f5f5);
+}
+
+.admin-estado {
+    font-weight: 600;
+}
+
+.admin-estado-ativa {
+    color: #2e7d32;
+}
+
+.admin-estado-inativa {
+    color: #1565c0;
+}
+
+.admin-acoes {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.btn-admin {
+    padding: 5px 10px;
+    font-size: 13px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.btn-admin-toggle {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.btn-admin-toggle:hover {
+    background-color: #bbdefb;
+}
+
+.btn-admin-pontos {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+.btn-admin-pontos:hover {
+    background-color: #ffe0b2;
+}
+
+.btn-admin-apagar {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.btn-admin-apagar:hover {
+    background-color: #ffcdd2;
+}
