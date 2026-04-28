@@ -8,6 +8,7 @@ let challengesScopeFilter = 'mine';   // 'mine' | 'all'
 let challengesStatusFilter = 'current'; // 'current' | 'past'
 let currentUser = null;
 let pendingGameDate = null;
+let adminConfirmCallback = null;
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1365,27 +1366,33 @@ async function adminToggleAtivo(duplaId) {
         return;
     }
 
-    try {
-        const response = await fetch(`/api/admin/duplas/${duplaId}/toggle-active`, {
-            method: 'PATCH'
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            alert(data.error || 'Erro ao alterar estado da dupla');
-            return;
-        }
+    const nomeDupla = getNomeDupla(duplaId);
+    const dupla = duplas.find(d => Number(d.dupla_id) === Number(duplaId));
+    const acao = dupla && dupla.active === false ? 'ativar' : 'desativar';
 
-        // Actualizar dados locais
-        const idx = duplas.findIndex(d => Number(d.dupla_id) === Number(duplaId));
-        if (idx !== -1) {
-            duplas[idx].active = data.dupla.active;
+    adminConfirm(`Tem a certeza de que deseja ${acao} a dupla ${nomeDupla}?`, async () => {
+        try {
+            const response = await fetch(`/api/admin/duplas/${duplaId}/toggle-active`, {
+                method: 'PATCH'
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.error || 'Erro ao alterar estado da dupla');
+                return;
+            }
+
+            // Actualizar dados locais
+            const idx = duplas.findIndex(d => Number(d.dupla_id) === Number(duplaId));
+            if (idx !== -1) {
+                duplas[idx].active = data.dupla.active;
+            }
+            renderAdminDuplas();
+            renderClassification();
+        } catch (error) {
+            console.error('Erro ao alterar estado da dupla:', error);
+            alert('Erro ao alterar estado da dupla');
         }
-        renderAdminDuplas();
-        renderClassification();
-    } catch (error) {
-        console.error('Erro ao alterar estado da dupla:', error);
-        alert('Erro ao alterar estado da dupla');
-    }
+    });
 }
 
 async function adminReduzirPontos(duplaId, percentagem) {
@@ -1394,33 +1401,32 @@ async function adminReduzirPontos(duplaId, percentagem) {
     }
 
     const nomeDupla = getNomeDupla(duplaId);
-    if (!confirm(`Reduzir ${percentagem}% dos pontos de ${nomeDupla}?`)) {
-        return;
-    }
 
-    try {
-        const response = await fetch(`/api/admin/duplas/${duplaId}/reduzir-pontos`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ percentagem })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            alert(data.error || 'Erro ao reduzir pontos');
-            return;
-        }
+    adminConfirm(`Tem a certeza de que deseja reduzir ${percentagem}% dos pontos de ${nomeDupla}?`, async () => {
+        try {
+            const response = await fetch(`/api/admin/duplas/${duplaId}/reduzir-pontos`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ percentagem })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.error || 'Erro ao reduzir pontos');
+                return;
+            }
 
-        // Actualizar dados locais
-        const idx = duplas.findIndex(d => Number(d.dupla_id) === Number(duplaId));
-        if (idx !== -1) {
-            duplas[idx].pontos = data.dupla.pontos;
+            // Actualizar dados locais
+            const idx = duplas.findIndex(d => Number(d.dupla_id) === Number(duplaId));
+            if (idx !== -1) {
+                duplas[idx].pontos = data.dupla.pontos;
+            }
+            renderAdminDuplas();
+            renderClassification();
+        } catch (error) {
+            console.error('Erro ao reduzir pontos:', error);
+            alert('Erro ao reduzir pontos');
         }
-        renderAdminDuplas();
-        renderClassification();
-    } catch (error) {
-        console.error('Erro ao reduzir pontos:', error);
-        alert('Erro ao reduzir pontos');
-    }
+    });
 }
 
 async function adminApagarDesafio(desafioId) {
@@ -1428,31 +1434,48 @@ async function adminApagarDesafio(desafioId) {
         return;
     }
 
-    if (!confirm('Apagar este desafio? Esta ação não pode ser desfeita.')) {
-        return;
-    }
+    adminConfirm('Tem a certeza de que deseja apagar este desafio? Esta ação não pode ser desfeita.', async () => {
+        try {
+            const response = await fetch(`/api/admin/desafios/${desafioId}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.error || 'Erro ao apagar desafio');
+                return;
+            }
 
-    try {
-        const response = await fetch(`/api/admin/desafios/${desafioId}`, {
-            method: 'DELETE'
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            alert(data.error || 'Erro ao apagar desafio');
-            return;
+            // Remover dos dados locais
+            const idx = desafios.findIndex(d => String(d._id) === String(desafioId));
+            if (idx !== -1) {
+                desafios.splice(idx, 1);
+            }
+            renderAdminDesafios();
+            renderClassification();
+        } catch (error) {
+            console.error('Erro ao apagar desafio:', error);
+            alert('Erro ao apagar desafio');
         }
+    });
+}
 
-        // Remover dos dados locais
-        const idx = desafios.findIndex(d => String(d._id) === String(desafioId));
-        if (idx !== -1) {
-            desafios.splice(idx, 1);
-        }
-        renderAdminDesafios();
-        renderClassification();
-    } catch (error) {
-        console.error('Erro ao apagar desafio:', error);
-        alert('Erro ao apagar desafio');
+function adminConfirm(mensagem, callback) {
+    adminConfirmCallback = callback;
+    document.getElementById('adminConfirmText').textContent = mensagem;
+    document.getElementById('adminConfirmModal').classList.remove('hidden');
+}
+
+function adminConfirmYes() {
+    document.getElementById('adminConfirmModal').classList.add('hidden');
+    if (typeof adminConfirmCallback === 'function') {
+        adminConfirmCallback();
     }
+    adminConfirmCallback = null;
+}
+
+function adminConfirmNo() {
+    document.getElementById('adminConfirmModal').classList.add('hidden');
+    adminConfirmCallback = null;
 }
 
 // ==================== PUSH NOTIFICATIONS ====================
