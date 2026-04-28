@@ -559,20 +559,25 @@ function renderClassification() {
         };
     });
     
-    // Ordenar por pontos (descendente)
-    duplasComEstatisticas.sort((a, b) => b.pontos - a.pontos);
-    
-    // Calcular rankings considerando empates (pontos iguais = mesma posição)
+    // Ordenar por pontos (descendente), desempate por número de jogos (descendente)
+    duplasComEstatisticas.sort((a, b) => {
+        if (b.pontos !== a.pontos) return b.pontos - a.pontos;
+        return b.jogos - a.jogos;
+    });
+
+    // Calcular rankings considerando empates (pontos iguais e jogos iguais = mesma posição)
     let ultimoPontos = null;
+    let ultimoJogos = null;
     let rankingAtual = 0;
     const duplasComRanking = duplasComEstatisticas.map((dupla, index) => {
         if (index === 0) {
             rankingAtual = 1;
-        } else if (dupla.pontos !== ultimoPontos) {
+        } else if (dupla.pontos !== ultimoPontos || dupla.jogos !== ultimoJogos) {
             rankingAtual = index + 1;
         }
 
         ultimoPontos = dupla.pontos;
+        ultimoJogos = dupla.jogos;
         return { ...dupla, ranking: rankingAtual };
     });
     
